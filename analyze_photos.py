@@ -7,7 +7,9 @@ from datetime import datetime
 import config
 from truck_detector import TruckDetector
 from telegram_bot import TelegramBot  # Импортируем новый класс
-from test_tdm import initialize_tdm_bot, tdm_bot_instance  # Импортируем TDM бот
+from tdm_bot import initialize_tdm_bot, tdm_bot_instance  # Импортируем TDM бот
+
+from tdm_bot_simple import tdm_simple_bot  # Используем упрощенную версию
 
 
 DB_CONFIG = config.DB_CONFIG
@@ -28,17 +30,38 @@ def find_file_case_insensitive(filename, directory):
     return None
 
 
-def send_to_both_bots(image_with_boxes, caption):
+def send_to_both_bots(image_path, caption):
     """
-    Отправка изображения и текста в оба бота одновременно
+    Автоматическая отправка изображения и текста в оба бота одновременно
     """
+    results = []
+
     # Отправка в Telegram
-    telegram_success = telegram_bot.send_photo(image_with_boxes, caption)
+    try:
+        telegram_success = telegram_bot.send_photo(image_path, caption)
+        results.append(("Telegram", telegram_success))
+        if telegram_success:
+            print("✅ Сообщение отправлено в Telegram")
+        else:
+            print("❌ Не удалось отправить в Telegram")
+    except Exception as e:
+        print(f"❌ Ошибка отправки в Telegram: {e}")
+        results.append(("Telegram", False))
 
-    # Отправка в TDM
-    tdm_success = tdm_bot.send_photo_with_caption(image_with_boxes, caption)
+    # Отправка в TDM (упрощенная версия)
+    try:
+        # tdm_success = tdm_simple_bot.send_photo_with_caption(image_path, caption)
+        tdm_success = tdm_bot.send_photo_with_caption(image_path, caption)
+        results.append(("TDM", tdm_success))
+        if tdm_success:
+            print("✅ Сообщение отправлено в TDM")
+        else:
+            print("❌ Не удалось отправить в TDM")
+    except Exception as e:
+        print(f"❌ Ошибка отправки в TDM: {e}")
+        results.append(("TDM", False))
 
-    return telegram_success, tdm_success
+    return results
 
 
 
