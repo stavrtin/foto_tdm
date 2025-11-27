@@ -21,7 +21,8 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/var/log/fotocatcher/mail_pusher.log'),
+        # logging.FileHandler('/var/log/fotocatcher/mail_pusher.log'),
+        logging.FileHandler('./logs/mail_pusher.log'),
         logging.StreamHandler()
     ]
 )
@@ -84,53 +85,139 @@ class Camera_trap:
 
         return subjects_all, times
 
+    # def download_attachments(self, msg_data_all, remote_folder, ssh_host, ssh_username, ssh_password, ssh_port):
+    #     filenames = []
+    #     filepathes = []
+    #
+    #     ssh = paramiko.SSHClient()
+    #     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    #
+    #     ssh.connect(
+    #         hostname=ssh_host,
+    #         username=ssh_username,
+    #         password=ssh_password,
+    #         port=ssh_port
+    #     )
+    #     sftp = ssh.open_sftp()
+    #     sftp.chdir(remote_folder)
+    #
+    #     for response in msg_data_all:
+    #         if isinstance(response, tuple):
+    #             msg = email.message_from_bytes(response[1])
+    #             if msg.get_content_maintype() == 'multipart':
+    #                 for part in msg.walk():
+    #                     if part.get_content_maintype() == 'multipart':
+    #                         continue
+    #                     if part.get('Content-Disposition') is None:
+    #                         continue
+    #
+    #                     filename = part.get_filename()  # Получаем имя файла
+    #                     if filename:
+    #                         # Декодируем имя файла
+    #                         decoded_name = decode_header(filename)[0][0]
+    #                         if isinstance(decoded_name, bytes):
+    #                             filename = decoded_name.decode()
+    #                         else:
+    #                             filename = decoded_name
+    #                         filenames.append(filename)
+    #
+    #                         # filepath = os.path.join(remote_folder, filename)  # Сохраняем файл
+    #                         filepath = f"{remote_folder}/{filename}"
+    #
+    #                         if any(ext in filename.lower() for ext in
+    #                                ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.mp4', '.avi', '.mov',
+    #                                 '.doc']):  # Проверяем тип файла
+    #                             with sftp.file(filepath, 'wb') as f:
+    #                                 f.write(part.get_payload(decode=True))
+    #                         filepathes.append(filepath)
+    #     sftp.close()
+    #     return filenames, filepathes
     def download_attachments(self, msg_data_all, remote_folder, ssh_host, ssh_username, ssh_password, ssh_port):
         filenames = []
         filepathes = []
+        local_filepathes = []
+
+        # ИЗМЕНЕНИЕ ЗДЕСЬ: используем ту же папку для локального сохранения
+        local_folder = './fc_media'  # Теперь та же папка
+        os.makedirs(local_folder, exist_ok=True)
+        logger.info(f"Локальная папка: {local_folder}")
 
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-        ssh.connect(
-            hostname=ssh_host,
-            username=ssh_username,
-            password=ssh_password,
-            port=ssh_port
-        )
-        sftp = ssh.open_sftp()
-        sftp.chdir(remote_folder)
+        try:
+            ssh.connect(
+                hostname=ssh_host,
+                username=ssh_username,
+                password=ssh_password,
+                port=ssh_port
+            )
 
-        for response in msg_data_all:
-            if isinstance(response, tuple):
-                msg = email.message_from_bytes(response[1])
-                if msg.get_content_maintype() == 'multipart':
-                    for part in msg.walk():
-                        if part.get_content_maintype() == 'multipart':
-                            continue
-                        if part.get('Content-Disposition') is None:
-                            continue
+            # Создаем директорию на удаленном сервере
+            stdin, stdout, stderr = ssh.exec_command(f'mkdir -p {remote_folder}')
+            exit_status = stdout.channel.recv_exit_status()
+            if exit_status == 0:
+                logger.info(f"Директория {remote_folder} создана на сервере")
 
-                        filename = part.get_filename()  # Получаем имя файла
-                        if filename:
-                            # Декодируем имя файла
-                            decoded_name = decode_header(filename)[0][0]
-                            if isinstance(decoded_name, bytes):
-                                filename = decoded_name.decode()
-                            else:
-                                filename = decoded_name
-                            filenames.append(filename)
+            sftp = ssh.open_sftp()
+            sftp.chdir(remote_folder)
 
-                            # filepath = os.path.join(remote_folder, filename)  # Сохраняем файл
-                            filepath = f"{remote_folder}/{filename}"
+            for response in msg_data_all:
+                if isinstance(response, tuple):
+                    msg = email.message_from_bytes(response[1])
+                    if msg.get_content_maintype() == 'multipart':
+                        for part in msg.walk():
+                            if part.get_content_maintype() == 'multipart':
+                                continue
+                            if part.get('Content-Disposition') is None:
+                                continue
 
-                            if any(ext in filename.lower() for ext in
-                                   ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.mp4', '.avi', '.mov',
-                                    '.doc']):  # Проверяем тип файла
-                                with sftp.file(filepath, 'wb') as f:
-                                    f.write(part.get_payload(decode=True))
-                            filepathes.append(filepath)
-        sftp.close()
-        return filenames, filepathes
+                            filename = part.get_filename()
+                            if filename:
+                                decoded_name = decode_header(filename)[0][0]
+                                if isinstance(decoded_name, bytes):
+                                    filename = decoded_name.decode()
+                                else:
+                                    filename = decoded_name
+                                filenames.append(filename)
+
+                                # Пути для сохранения
+                                remote_filepath = f"{remote_folder}/{filename}"
+                                local_filepath = os.path.join(local_folder, filename)
+
+                                if any(ext in filename.lower() for ext in
+                                       ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.mp4', '.avi', '.mov',
+                                        '.doc']):
+                                    file_content = part.get_payload(decode=True)
+
+                                    try:
+                                        # Сохраняем на удаленный сервер
+                                        with sftp.file(remote_filepath, 'wb') as f:
+                                            f.write(file_content)
+                                        logger.info(f"Файл {filename} успешно сохранен на сервер")
+
+                                        # Сохраняем локально (в ту же папку ./fc_media)
+                                        with open(local_filepath, 'wb') as f:
+                                            f.write(file_content)
+                                        logger.info(f"Файл {filename} успешно сохранен локально")
+
+                                    except Exception as e:
+                                        logger.error(f"Ошибка сохранения файла {filename}: {e}")
+
+                                filepathes.append(remote_filepath)
+                                local_filepathes.append(local_filepath)
+
+        except Exception as e:
+            logger.error(f"Ошибка в download_attachments: {e}")
+            raise
+        finally:
+            if 'sftp' in locals():
+                sftp.close()
+            ssh.close()
+
+        return filenames, filepathes, local_filepathes
+
+
 
     def get_text_letters(self, msg_data_all):
         text_all = []
@@ -227,6 +314,7 @@ if __name__ == "__main__":
     ssh_password = config.SSH_PASSWORD
     ssh_port = 22
     remote_folder = '/home/adm_1/foto_catcher/fc_media'
+    # remote_folder = './fc_media'
 
     try:
 #        test = Camera_trap(login=config.LOGIN_MAIL, password=config.PASSWORD_MAIL, imap_server="imap.yandex.ru")
@@ -243,8 +331,14 @@ if __name__ == "__main__":
             logger.info("Обработка писем...")
             subjects, time = test.get_subjects(letters)
             time_get = test.get_time_getting(letters)
-            filename, filepath = test.download_attachments(letters, remote_folder, ssh_host, ssh_username, ssh_password,
+            filename, filepath, local_filepath  = test.download_attachments(letters,
+            # filename, filepath, local_filepath  = test.download_attachments(letters,
+                                                           remote_folder,
+                                                           ssh_host,
+                                                           ssh_username,
+                                                           ssh_password,
                                                            ssh_port)
+
             text = test.get_text_letters(letters)
             
             df = pd.DataFrame({
@@ -253,6 +347,7 @@ if __name__ == "__main__":
                 'time_getting': time_get,
                 'filename': filename,
                 'filepath': filepath,
+                # 'local_filepath': local_filepath,  # новый столбец с локальным путем ! Убрать на боевом
                 'text': text
             })
 

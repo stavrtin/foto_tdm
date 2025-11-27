@@ -1,4 +1,9 @@
 # analyze_photos.py
+import logging
+
+logging.getLogger('PIL').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+
 import psycopg2
 import json
 import os
@@ -10,6 +15,7 @@ from telegram_bot import TelegramBot  # Импортируем новый кла
 from tdm_bot import initialize_tdm_bot, tdm_bot_instance  # Импортируем TDM бот
 
 from tdm_bot_simple import tdm_simple_bot  # Используем упрощенную версию
+from config import TDM_DICT
 
 
 DB_CONFIG = config.DB_CONFIG
@@ -30,7 +36,7 @@ def find_file_case_insensitive(filename, directory):
     return None
 
 
-def send_to_both_bots(image_path, caption):
+def send_to_both_bots(image_path, caption, id_foto_catch):
     """
     Автоматическая отправка изображения и текста в оба бота одновременно
     """
@@ -51,7 +57,25 @@ def send_to_both_bots(image_path, caption):
     # Отправка в TDM (упрощенная версия)
     try:
         # tdm_success = tdm_simple_bot.send_photo_with_caption(image_path, caption)
-        tdm_success = tdm_bot.send_photo_with_caption(image_path, caption)
+        # tdm_success = tdm_bot.send_photo_with_caption(image_path, caption)
+
+        # -------- выбираем из словаря ОКРУГОВ тот округ (калал ТЛМ), в котором стоит ловушка (по ID)
+        for i in TDM_DICT.keys():
+            if id_foto_catch in TDM_DICT.get(i):
+                group_id = i
+
+            # 3073454243690670 : ['869492057467515'],  # Зелек
+            # 3073455033858234 : ['869492057438961'],  # ТИНАО
+            # 3073454609239370 : ['869492058558577'],  # CAO
+
+        # group_id = 3073454243690670
+        # group_id = 3073455033858234
+
+        tdm_success = tdm_bot.send_photo_with_caption(
+                        group_id=group_id,
+                        image_path=image_path,
+                        caption=caption
+                        )
         results.append(("TDM", tdm_success))
         if tdm_success:
             print("✅ Сообщение отправлено в TDM")
@@ -74,7 +98,7 @@ def analyze_photos():
 
         # Получаем необработанные фотографии
         cursor.execute("""
-            SELECT filename FROM fotos_data 
+            SELECT filename, imei FROM fotos_data 
             WHERE info_detect IS NULL OR info_detect = ''
         """)
 
@@ -88,10 +112,14 @@ def analyze_photos():
 
         detector = TruckDetector()
         processed_count = 0
-        base_dir = 'c:/Users/TurchinMV/Downloads/truck_foto/foto_catcher/'
+        # base_dir = 'c:/Users/TurchinMV/Downloads/truck_foto/foto_catcher/'
+        base_dir = './fc_media/'
         # base_dir = '/home/adm_1/foto_catcher/fc_media'
 
-        for (filename,) in undetected_files:
+        for item_ in undetected_files:
+            filename = item_[0]
+            imei_id = item_[1]
+
             try:
                 file_conn = psycopg2.connect(**DB_CONFIG)
                 file_cursor = file_conn.cursor()
@@ -121,7 +149,11 @@ def analyze_photos():
                         print(f'truck = {object[1]}')
 
                 # Получаем данные из БД
-                cursor.execute(f"SELECT imei, time_accident FROM fotos_data WHERE filename = %s", (filename,))
+                # cursor.execute(f"SELECT imei, time_accident, date FROM fotos_data WHERE filename = %s", (filename,))
+                cursor.execute(
+                    "SELECT time_accident, date, imei FROM fotos_data WHERE filename = %s AND imei = %s",
+                    (filename, imei_id)
+                                )
                 row_data_file = cursor.fetchall()
 
                 # if row_data_file:
@@ -134,16 +166,23 @@ def analyze_photos():
                     # telegram_bot.send_message(output_message)
 
                     # Отправляем изображение с bounding boxes
-                    photo_caption = (f"Обнаружен грузовик\n"
-                                     f"Время обнаружения: {row_data_file[0][1]}\n"
-                                     f"Ловушка: {row_data_file[0][0]} \n"
-                                     f"Файл: {filename}\n"
-                                     # f"Время cjj,otybz : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                                     )
+                    # photo_caption = (f"Локация:     ----\n"
+                    #                  f"Дата:       {row_data_file[0][2]}\n"
+                    #                  f"Время:      {row_data_file[0][1]}\n"
+                    #                  f"ID ловушки: {row_data_file[0][0][-4:]} - {filename}\n"
+                    #                  # f"Время cjj,otybz : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    #                  )
+                    photo_caption = (f"Локация:\t'----'\n"
+                                     f"Дата:\t\t{row_data_file[0][1]}\n"
+                                     f"Время:\t\t{row_data_file[0][0]}\n"
+                                     f"ID ловушки:\t{row_data_file[0][2][-4:]} - {filename}")
+
+                    # ----- id ЛОВУШКИ ----------------
+                    id_foto_catch = row_data_file[0][2]
 
                     # telegram_bot.send_photo(image_with_boxes, photo_caption)
                     # Отправляем в оба бота одновременно
-                    telegram_success, tdm_success = send_to_both_bots(image_with_boxes, photo_caption)
+                    telegram_success, tdm_success = send_to_both_bots(image_with_boxes, photo_caption, id_foto_catch)
 
 
                 # Обновляем запись в БД

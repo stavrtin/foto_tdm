@@ -24,7 +24,9 @@ class TDMBot:
     def __init__(self):
         self.token = config.TOKEN_TDM
         self.workspace_id = config.TARGET_WORKSPACE_ID
-        self.group_id = config.TARGET_GROUPE_ID
+        # self.group_id = config.TARGET_GROUPE_ID
+        self.group_id = None  # Инициализируем как None
+        self.name_foto = None  # Инициализируем как None
 
         self.rest = 'https://api.tdm.mos.ru'
         self.sse = 'https://pusher.tdm.mos.ru'
@@ -38,28 +40,68 @@ class TDMBot:
 
         self.logger = logging.getLogger('tdm_bot')
 
-    def send_photo_with_caption(self, image_path, caption):
+    # def send_photo_with_caption(self, group_id, image_path, caption):
+    #     """
+    #     Отправка фото с подписью в TDM
+    #
+    #     Args:
+    #         image_path (str): путь к файлу изображения
+    #         caption (str): текст подписи
+    #
+    #     Returns:
+    #         bool: успешность отправки
+    #
+    #     """
+    #     # Конвертируем numpy array в PIL Image
+    #     # pil_image = Image.fromarray(image_path)
+    #     #
+    #     # # Сохраняем изображение в буфер
+    #     # img_buffer = io.BytesIO()
+    #     # pil_image.save(img_buffer, format='JPEG')
+    #     # img_buffer.seek(0)
+    #
+    #     try:
+    #         self.logger.info(f"🔄 Попытка отправки фото фото в TDM, группа: {group_id}")
+    #
+    #         # Конвертируем numpy array в PIL Image
+    #         pil_image = PILImage.fromarray(image_path)
+    #
+    #         # Сохраняем изображение в буфер
+    #         img_buffer = io.BytesIO()
+    #         pil_image.save(img_buffer, format='JPEG')
+    #         img_data = img_buffer.getvalue()
+    #         img_buffer.close()
+    #
+    #         # Создаем объект Image для messenger_bot_api
+    #         image_obj = Image(f"detected_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg", img_data)
+    #         # Читаем файл изображения
+    #         # with open(image_path, 'rb') as f:
+    #         #     image_data = f.read()
+    #         #
+    #         # # Создаем объект Image
+    #         # image = Image(os.path.basename(image_path), image_data)
+    #
+    #         # Отправляем сообщение
+    #         self.bot._request.send_image_message(
+    #             self.workspace_id,
+    #             # self.group_id,
+    #             group_id,
+    #             image_obj,
+    #             MessageRequest(caption)
+    #         )
+    #
+    #         self.logger.info(f"✅ Фото отправлено в TDM, группа: {group_id}")
+    #         return True
+    #
+    #     except Exception as e:
+    #         self.logger.error(f"❌ Ошибка отправки в TDM(группа {group_id}): {e}")
+    #         return False
+    def send_photo_with_caption(self, group_id, image_path, caption):
         """
         Отправка фото с подписью в TDM
-
-        Args:
-            image_path (str): путь к файлу изображения
-            caption (str): текст подписи
-
-        Returns:
-            bool: успешность отправки
-
         """
-        # Конвертируем numpy array в PIL Image
-        # pil_image = Image.fromarray(image_path)
-        #
-        # # Сохраняем изображение в буфер
-        # img_buffer = io.BytesIO()
-        # pil_image.save(img_buffer, format='JPEG')
-        # img_buffer.seek(0)
-
         try:
-            self.logger.info(f"🔄 Попытка отправки фото в TDM")
+            self.logger.info(f"🔄 Попытка отправки фото в TDM, группа: {group_id}")
 
             # Конвертируем numpy array в PIL Image
             pil_image = PILImage.fromarray(image_path)
@@ -72,26 +114,32 @@ class TDMBot:
 
             # Создаем объект Image для messenger_bot_api
             image_obj = Image(f"detected_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg", img_data)
-            # Читаем файл изображения
-            # with open(image_path, 'rb') as f:
-            #     image_data = f.read()
-            #
-            # # Создаем объект Image
-            # image = Image(os.path.basename(image_path), image_data)
+
+            # ДОБАВЛЯЕМ ДИАГНОСТИКУ
+            self.logger.debug(f"📊 Диагностика: workspace_id={self.workspace_id}, group_id={group_id}")
 
             # Отправляем сообщение
             self.bot._request.send_image_message(
                 self.workspace_id,
-                self.group_id,
+                group_id,
                 image_obj,
                 MessageRequest(caption)
             )
 
-            self.logger.info(f"✅ Фото отправлено в TDM: {os.path.basename(image_path)}")
+            self.logger.info(f"✅ Фото отправлено в TDM, группа: {group_id}")
             return True
 
         except Exception as e:
-            self.logger.error(f"❌ Ошибка отправки в TDM: {e}")
+            # ДЕТАЛЬНАЯ ИНФОРМАЦИЯ ОБ ОШИБКЕ
+            self.logger.error(f"❌ Ошибка отправки в TDM (группа {group_id}): {str(e)}")
+            self.logger.error(f"📋 Детали ошибки: тип={type(e).__name__}, workspace_id={self.workspace_id}")
+
+            # Если есть дополнительные атрибуты ошибки
+            if hasattr(e, 'response'):
+                self.logger.error(f"📡 Response: {e.response}")
+            if hasattr(e, 'status_code'):
+                self.logger.error(f"🔢 Status code: {e.status_code}")
+
             return False
 
     def start_bot(self):
