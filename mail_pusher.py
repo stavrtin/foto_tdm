@@ -16,16 +16,11 @@ import config
 
 ''' Файл для сбора данных из почтового ящика .... '''
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        # logging.FileHandler('/var/log/fotocatcher/mail_pusher.log'),
-        logging.FileHandler('./logs/mail_pusher.log'),
-        logging.StreamHandler()
-    ]
-)
+# Импортируем общую настройку логирования
+from logging_config import setup_logging
+
+# Настраиваем логирование
+setup_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -36,6 +31,7 @@ class Camera_trap:
         self.login = login
         self.password = password
         self.mail = imaplib.IMAP4_SSL(imap_server, 993)
+        logger.info(f"Инициализация Camera_trap для сервера: {imap_server}")
 
     def get_connection_folder(self, mailbox):
         try:
@@ -53,6 +49,8 @@ class Camera_trap:
         for email_uid in email_uids:
             status, msg_data = self.mail.uid('fetch', email_uid, '(RFC822)')  # Получаем письмо по UID
             msg_data_all.append(msg_data[0])
+
+        logger.info(f"Получено {len(msg_data_all)} непрочитанных писем")
         return msg_data_all
 
     def get_time_getting(self, msg_data_all):  # доп
@@ -85,53 +83,7 @@ class Camera_trap:
 
         return subjects_all, times
 
-    # def download_attachments(self, msg_data_all, remote_folder, ssh_host, ssh_username, ssh_password, ssh_port):
-    #     filenames = []
-    #     filepathes = []
-    #
-    #     ssh = paramiko.SSHClient()
-    #     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    #
-    #     ssh.connect(
-    #         hostname=ssh_host,
-    #         username=ssh_username,
-    #         password=ssh_password,
-    #         port=ssh_port
-    #     )
-    #     sftp = ssh.open_sftp()
-    #     sftp.chdir(remote_folder)
-    #
-    #     for response in msg_data_all:
-    #         if isinstance(response, tuple):
-    #             msg = email.message_from_bytes(response[1])
-    #             if msg.get_content_maintype() == 'multipart':
-    #                 for part in msg.walk():
-    #                     if part.get_content_maintype() == 'multipart':
-    #                         continue
-    #                     if part.get('Content-Disposition') is None:
-    #                         continue
-    #
-    #                     filename = part.get_filename()  # Получаем имя файла
-    #                     if filename:
-    #                         # Декодируем имя файла
-    #                         decoded_name = decode_header(filename)[0][0]
-    #                         if isinstance(decoded_name, bytes):
-    #                             filename = decoded_name.decode()
-    #                         else:
-    #                             filename = decoded_name
-    #                         filenames.append(filename)
-    #
-    #                         # filepath = os.path.join(remote_folder, filename)  # Сохраняем файл
-    #                         filepath = f"{remote_folder}/{filename}"
-    #
-    #                         if any(ext in filename.lower() for ext in
-    #                                ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.mp4', '.avi', '.mov',
-    #                                 '.doc']):  # Проверяем тип файла
-    #                             with sftp.file(filepath, 'wb') as f:
-    #                                 f.write(part.get_payload(decode=True))
-    #                         filepathes.append(filepath)
-    #     sftp.close()
-    #     return filenames, filepathes
+
     def download_attachments(self, msg_data_all, remote_folder, ssh_host, ssh_username, ssh_password, ssh_port):
         filenames = []
         filepathes = []

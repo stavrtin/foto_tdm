@@ -1,8 +1,7 @@
 # analyze_photos.py
-import logging
 
-logging.getLogger('PIL').setLevel(logging.WARNING)
-logging.getLogger('urllib3').setLevel(logging.WARNING)
+# Импортируем настройку логирования
+from logging_config import setup_logging
 
 import psycopg2
 import json
@@ -12,11 +11,14 @@ from datetime import datetime
 import config
 from truck_detector import TruckDetector
 from telegram_bot import TelegramBot  # Импортируем новый класс
-from tdm_bot import initialize_tdm_bot, tdm_bot_instance  # Импортируем TDM бот
+from tdm_bot import initialize_tdm_bot  # Импортируем TDM бот
 
-from tdm_bot_simple import tdm_simple_bot  # Используем упрощенную версию
 from config import TDM_DICT
 
+# Настраиваем логирование
+setup_logging()
+import logging
+logger = logging.getLogger(__name__)
 
 DB_CONFIG = config.DB_CONFIG
 TELEGRAM_CONFIG = config.TELEGRAM_CONFIG  # Конфиг Telegram
@@ -27,12 +29,17 @@ tdm_bot = initialize_tdm_bot()  # Инициализируем TDM бот
 
 def find_file_case_insensitive(filename, directory):
     """Поиск файла без учета регистра"""
+    logger.debug(f"Поиск файла {filename} в {directory}")
+
     if os.path.exists(os.path.join(directory, filename)):
         return os.path.join(directory, filename)
 
     for file in os.listdir(directory):
         if file.lower() == filename.lower():
             return os.path.join(directory, file)
+
+    logger.warning(f"Файл {filename} не найден в {directory}")
+
     return None
 
 
@@ -40,6 +47,8 @@ def send_to_both_bots(image_path, caption, id_foto_catch):
     """
     Автоматическая отправка изображения и текста в оба бота одновременно
     """
+    logger.info(f"Отправка в боты: {caption[:50]}...")
+
     results = []
 
     # Отправка в Telegram
@@ -48,41 +57,45 @@ def send_to_both_bots(image_path, caption, id_foto_catch):
         results.append(("Telegram", telegram_success))
         if telegram_success:
             print("✅ Сообщение отправлено в Telegram")
+            logger.info("✅ Сообщение отправлено в Telegram")
         else:
             print("❌ Не удалось отправить в Telegram")
+            logger.warning("❌ Не удалось отправить в Telegram")
     except Exception as e:
         print(f"❌ Ошибка отправки в Telegram: {e}")
+        logger.error(f"❌ Ошибка отправки в Telegram: {e}")
         results.append(("Telegram", False))
 
     # Отправка в TDM (упрощенная версия)
+
     try:
         # tdm_success = tdm_simple_bot.send_photo_with_caption(image_path, caption)
         # tdm_success = tdm_bot.send_photo_with_caption(image_path, caption)
 
         # -------- выбираем из словаря ОКРУГОВ тот округ (калал ТЛМ), в котором стоит ловушка (по ID)
+        group_id = None
         for i in TDM_DICT.keys():
             if id_foto_catch in TDM_DICT.get(i):
                 group_id = i
+                break
 
-            # 3073454243690670 : ['869492057467515'],  # Зелек
-            # 3073455033858234 : ['869492057438961'],  # ТИНАО
-            # 3073454609239370 : ['869492058558577'],  # CAO
-
-        # group_id = 3073454243690670
-        # group_id = 3073455033858234
-
-        tdm_success = tdm_bot.send_photo_with_caption(
-                        group_id=group_id,
-                        image_path=image_path,
-                        caption=caption
-                        )
-        results.append(("TDM", tdm_success))
-        if tdm_success:
-            print("✅ Сообщение отправлено в TDM")
+        if group_id is None:
+            logger.warning(f"❌ Не найден group_id для ID ловушки: {id_foto_catch}")
+            results.append(("TDM", False))
         else:
-            print("❌ Не удалось отправить в TDM")
+            tdm_success = tdm_bot.send_photo_with_caption(
+                group_id=group_id,
+                image_path=image_path,
+                caption=caption
+            )
+            results.append(("TDM", tdm_success))
+            if tdm_success:
+                logger.info("✅ Сообщение отправлено в TDM")
+            else:
+                logger.warning("❌ Не удалось отправить в TDM")
+
     except Exception as e:
-        print(f"❌ Ошибка отправки в TDM: {e}")
+        logger.error(f"❌ Ошибка отправки в TDM: {e}")
         results.append(("TDM", False))
 
     return results
@@ -91,6 +104,7 @@ def send_to_both_bots(image_path, caption, id_foto_catch):
 
 def analyze_photos():
     """Основная функция анализа фотографий"""
+    logger.info("🚀 Запуск анализа фотографий")
 
     try:
         conn = psycopg2.connect(**DB_CONFIG)
@@ -106,9 +120,11 @@ def analyze_photos():
 
         if not undetected_files:
             print("✅ Все фотографии уже обработаны")
+            logger.info("✅ Все фотографии уже обработаны")
             return
 
         print(f"📷 Найдено {len(undetected_files)} необработанных фотографий")
+        logger.info(f"📷 Найдено {len(undetected_files)} необработанных фотографий")
 
         detector = TruckDetector()
         processed_count = 0
@@ -129,11 +145,13 @@ def analyze_photos():
 
                 if not filepath:
                     print(f"⚠️ Файл не найден: {filename} в директории {base_dir}")
+                    logger.warning(f"⚠️ Файл не найден: {filename} в директории {base_dir}")
                     file_cursor.close()
                     file_conn.close()
                     continue
 
                 print(f"🔍 Анализируем: {os.path.basename(filepath)}")
+                logger.info(f"🔍 Анализируем: {os.path.basename(filepath)}")
 
                 # Детекция объектов
                 trucks, image_with_boxes = detector.detect_truck(filepath, conf_threshold=0.6)
@@ -164,14 +182,7 @@ def analyze_photos():
                 if has_truck:
                     # Отправляем текстовое сообщение
                     # telegram_bot.send_message(output_message)
-
                     # Отправляем изображение с bounding boxes
-                    # photo_caption = (f"Локация:     ----\n"
-                    #                  f"Дата:       {row_data_file[0][2]}\n"
-                    #                  f"Время:      {row_data_file[0][1]}\n"
-                    #                  f"ID ловушки: {row_data_file[0][0][-4:]} - {filename}\n"
-                    #                  # f"Время cjj,otybz : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                    #                  )
                     photo_caption = (f"Локация:\t'----'\n"
                                      f"Дата:\t\t{row_data_file[0][1]}\n"
                                      f"Время:\t\t{row_data_file[0][0]}\n"
@@ -182,7 +193,8 @@ def analyze_photos():
 
                     # telegram_bot.send_photo(image_with_boxes, photo_caption)
                     # Отправляем в оба бота одновременно
-                    telegram_success, tdm_success = send_to_both_bots(image_with_boxes, photo_caption, id_foto_catch)
+                    send_results = send_to_both_bots(image_with_boxes, photo_caption, id_foto_catch)
+                    logger.info(f"Результаты отправки: {send_results}")
 
 
                 # Обновляем запись в БД
@@ -201,21 +213,24 @@ def analyze_photos():
                 file_conn.commit()
                 processed_count += 1
                 print(f"✅ Обновлено: {filename} - найдено {len(detection_results)} объектов")
+                logger.info(f"✅ Обновлено: {filename} - найдено {len(detection_results)} объектов")
 
                 file_cursor.close()
                 file_conn.close()
 
             except Exception as e:
-                print(f"❌ Ошибка при анализе {filename}: {e}")
+                logger.error(f"❌ Ошибка при анализе {filename}: {e}")
                 if 'file_conn' in locals():
                     file_cursor.close()
                     file_conn.close()
                 continue
 
         print(f"🎉 Обработка завершена. Обработано {processed_count} фотографий")
+        logger.info(f"🎉 Обработка завершена. Обработано {processed_count} фотографий")
 
     except Exception as e:
         print(f"❌ Критическая ошибка: {e}")
+        logger.error(f"❌ Критическая ошибка: {e}")
     finally:
         if 'conn' in locals():
             cursor.close()

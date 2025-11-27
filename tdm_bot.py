@@ -10,6 +10,9 @@ import io
 from PIL import Image as PILImage
 from datetime import datetime
 
+# Импортируем настройку логирования
+from logging_config import setup_logging
+
 # Настройка логирования
 root = logging.getLogger()
 root.setLevel(logging.DEBUG)
@@ -19,6 +22,8 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 root.addHandler(handler)
 
+# Настраиваем логирование
+setup_logging()
 
 class TDMBot:
     def __init__(self):
@@ -39,63 +44,9 @@ class TDMBot:
         })
 
         self.logger = logging.getLogger('tdm_bot')
+        self.logger.info("TDMBot инициализирован")
 
-    # def send_photo_with_caption(self, group_id, image_path, caption):
-    #     """
-    #     Отправка фото с подписью в TDM
-    #
-    #     Args:
-    #         image_path (str): путь к файлу изображения
-    #         caption (str): текст подписи
-    #
-    #     Returns:
-    #         bool: успешность отправки
-    #
-    #     """
-    #     # Конвертируем numpy array в PIL Image
-    #     # pil_image = Image.fromarray(image_path)
-    #     #
-    #     # # Сохраняем изображение в буфер
-    #     # img_buffer = io.BytesIO()
-    #     # pil_image.save(img_buffer, format='JPEG')
-    #     # img_buffer.seek(0)
-    #
-    #     try:
-    #         self.logger.info(f"🔄 Попытка отправки фото фото в TDM, группа: {group_id}")
-    #
-    #         # Конвертируем numpy array в PIL Image
-    #         pil_image = PILImage.fromarray(image_path)
-    #
-    #         # Сохраняем изображение в буфер
-    #         img_buffer = io.BytesIO()
-    #         pil_image.save(img_buffer, format='JPEG')
-    #         img_data = img_buffer.getvalue()
-    #         img_buffer.close()
-    #
-    #         # Создаем объект Image для messenger_bot_api
-    #         image_obj = Image(f"detected_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg", img_data)
-    #         # Читаем файл изображения
-    #         # with open(image_path, 'rb') as f:
-    #         #     image_data = f.read()
-    #         #
-    #         # # Создаем объект Image
-    #         # image = Image(os.path.basename(image_path), image_data)
-    #
-    #         # Отправляем сообщение
-    #         self.bot._request.send_image_message(
-    #             self.workspace_id,
-    #             # self.group_id,
-    #             group_id,
-    #             image_obj,
-    #             MessageRequest(caption)
-    #         )
-    #
-    #         self.logger.info(f"✅ Фото отправлено в TDM, группа: {group_id}")
-    #         return True
-    #
-    #     except Exception as e:
-    #         self.logger.error(f"❌ Ошибка отправки в TDM(группа {group_id}): {e}")
-    #         return False
+
     def send_photo_with_caption(self, group_id, image_path, caption):
         """
         Отправка фото с подписью в TDM
@@ -144,6 +95,7 @@ class TDMBot:
 
     def start_bot(self):
         """Запуск бота (для асинхронной работы)"""
+        self.logger.info("Запуск TDMBot")
         self.bot.start()
 
 
