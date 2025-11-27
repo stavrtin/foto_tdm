@@ -47,7 +47,7 @@ def send_to_both_bots(image_path, caption, id_foto_catch):
     """
     Автоматическая отправка изображения и текста в оба бота одновременно
     """
-    logger.info(f"Отправка в боты: {caption[:50]}...")
+    logger.info(f"Отправка в боты: {caption[:15]}...")
 
     results = []
 

@@ -32,7 +32,7 @@ class TelegramBot:
             image_array (numpy.array): Изображение в формате numpy array
             caption (str): Подпись к фото
         """
-        logger.info(f"Отправка фото в Telegram, caption: {caption[:50]}...")
+        logger.info(f"Отправка фото в Telegram, caption: {caption[:15]}...")
 
         try:
             # Конвертируем numpy array в PIL Image
