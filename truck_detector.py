@@ -127,8 +127,8 @@ def load_file_jpg():
 # Пример использования
 if __name__ == "__main__":
     # Инициализация логирования
+    # Только при прямом запуске модуля настраиваем логирование
     from logging_config import setup_logging
-
     setup_logging()
 
     detector = TruckDetector()

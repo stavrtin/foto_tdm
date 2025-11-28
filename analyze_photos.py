@@ -15,7 +15,7 @@ from tdm_bot import initialize_tdm_bot  # Импортируем TDM бот
 
 from config import TDM_DICT
 
-# Настраиваем логирование
+# Настраиваем логирование  ОДИН РАЗ в главном скрипте
 setup_logging()
 import logging
 logger = logging.getLogger(__name__)

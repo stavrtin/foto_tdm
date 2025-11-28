@@ -12,6 +12,8 @@ from datetime import datetime
 
 # Импортируем настройку логирования
 from logging_config import setup_logging
+# Только получаем логгер
+logger = logging.getLogger(__name__)
 
 # Настройка логирования
 root = logging.getLogger()
@@ -22,8 +24,6 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 root.addHandler(handler)
 
-# Настраиваем логирование
-setup_logging()
 
 class TDMBot:
     def __init__(self):
@@ -92,6 +92,37 @@ class TDMBot:
                 self.logger.error(f"🔢 Status code: {e.status_code}")
 
             return False
+
+    def send_info_message(self, group_id, caption):
+        """
+        Отправка фото с подписью в TDM
+        """
+        try:
+            self.logger.info(f"🔄 Попытка отправки фото в TDM, группа: {group_id}")
+
+            # Отправляем сообщение
+            self.bot._request.send_text(
+                self.workspace_id,
+                group_id,
+                MessageRequest(caption)
+            )
+
+            self.logger.info(f"✅ Собщение ушлов в TDM-группу: {group_id}")
+            return True
+
+        except Exception as e:
+            # ДЕТАЛЬНАЯ ИНФОРМАЦИЯ ОБ ОШИБКЕ
+            self.logger.error(f"❌ Ошибка отправки в TDM-группу {group_id}): {str(e)}")
+            self.logger.error(f"📋 Детали ошибки: тип={type(e).__name__}, workspace_id={self.workspace_id}")
+
+            # Если есть дополнительные атрибуты ошибки
+            if hasattr(e, 'response'):
+                self.logger.error(f"📡 Response: {e.response}")
+            if hasattr(e, 'status_code'):
+                self.logger.error(f"🔢 Status code: {e.status_code}")
+
+            return False
+
 
     def start_bot(self):
         """Запуск бота (для асинхронной работы)"""

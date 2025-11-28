@@ -5,7 +5,7 @@ from PIL import Image
 import numpy as np
 
 import logging
-
+# Только получаем логгер
 logger = logging.getLogger(__name__)
 
 

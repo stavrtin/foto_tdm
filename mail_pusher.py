@@ -20,7 +20,7 @@ import config
 from logging_config import setup_logging
 
 # Настраиваем логирование
-setup_logging()
+# Только получаем логгер
 logger = logging.getLogger(__name__)
 
 
@@ -259,6 +259,10 @@ class Transfer:
 
 
 if __name__ == "__main__":
+    # При прямом запуске настраиваем логирование
+    from logging_config import setup_logging
+    setup_logging()
+
     logger.info("Запуск скрипта проверки почты")
     
     ssh_host = DB_CONFIG['host']
